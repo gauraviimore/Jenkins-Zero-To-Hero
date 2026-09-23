@@ -14,23 +14,40 @@ pipeline {
       }
     }
 
+    stage('Upgrade Docker CLI') {
+      steps {
+        sh '''
+          set -eu
+
+          if ! command -v curl >/dev/null 2>&1; then
+            apt-get update
+            apt-get install -y ca-certificates curl
+          fi
+
+          DOCKER_CLI_TMP="$(mktemp -d)"
+          trap 'rm -rf "$DOCKER_CLI_TMP"' EXIT
+
+          curl -fsSL --retry 3 \
+            https://download.docker.com/linux/static/stable/x86_64/docker-29.8.1.tgz \
+            -o "$DOCKER_CLI_TMP/docker.tgz"
+
+          tar -xzf "$DOCKER_CLI_TMP/docker.tgz" \
+            -C "$DOCKER_CLI_TMP" docker/docker
+
+          install -m 0755 \
+            "$DOCKER_CLI_TMP/docker/docker" /usr/bin/docker
+
+          docker --version
+          docker version
+        '''
+      }
+    }
+
     stage('Build and Test') {
       steps {
         sh '''
           cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
           mvn clean package
-        '''
-      }
-    }
-
-    stage('Check Docker Version') {
-      steps {
-        sh '''
-          command -v docker
-          docker --version
-          echo "DOCKER_API_VERSION=${DOCKER_API_VERSION:-not set}"
-          docker version || true
-          cat /etc/os-release
         '''
       }
     }
