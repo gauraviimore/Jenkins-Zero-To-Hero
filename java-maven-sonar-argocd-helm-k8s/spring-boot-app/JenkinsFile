@@ -10,28 +10,43 @@ pipeline {
     stage('Checkout') {
       steps {
         // Jenkins automatically checks out the repository.
-        sh 'echo passed'
+        sh 'echo "Checkout completed"'
       }
     }
 
     stage('Build and Test') {
       steps {
-        sh 'ls -ltr'
-        sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && mvn clean package'
+        sh '''
+          cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+          mvn clean package
+        '''
       }
     }
 
     stage('Static Code Analysis') {
+      agent {
+        docker {
+          image 'maven:3.9-eclipse-temurin-21'
+          args '--user root'
+          reuseNode true
+        }
+      }
+
       environment {
         SONAR_URL = 'http://98.82.174.24:9000'
       }
+
       steps {
         withCredentials([
           string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')
         ]) {
           sh '''
             cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
-            mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+
+            java -version
+            mvn -version
+
+            mvn org.sonarsource.scanner.maven:sonar-maven-plugin:5.8.0.7211:sonar \
               -Dsonar.login="$SONAR_AUTH_TOKEN" \
               -Dsonar.host.url="$SONAR_URL"
           '''
@@ -43,6 +58,7 @@ pipeline {
       environment {
         DOCKER_IMAGE = "abhishekf5/ultimate-cicd:${BUILD_NUMBER}"
       }
+
       steps {
         script {
           sh '''
@@ -64,6 +80,7 @@ pipeline {
         GIT_REPO_NAME = 'Jenkins-Zero-To-Hero'
         GIT_USER_NAME = 'gauraviimore'
       }
+
       steps {
         withCredentials([
           string(credentialsId: 'github', variable: 'GITHUB_TOKEN')
@@ -72,9 +89,11 @@ pipeline {
             git config user.email "gauraviimadan@gmail.com"
             git config user.name "Gauravi More"
 
-            sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
+            sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" \
+              java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
 
-            git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
+            git add \
+              java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
 
             if git diff --cached --quiet; then
               echo "No deployment changes to commit."
