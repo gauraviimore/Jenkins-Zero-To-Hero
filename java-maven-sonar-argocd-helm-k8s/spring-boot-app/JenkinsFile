@@ -23,6 +23,18 @@ pipeline {
       }
     }
 
+    stage('Check Docker Version') {
+      steps {
+        sh '''
+          command -v docker
+          docker --version
+          echo "DOCKER_API_VERSION=${DOCKER_API_VERSION:-not set}"
+          docker version || true
+          cat /etc/os-release
+        '''
+      }
+    }
+
     stage('Static Code Analysis') {
       agent {
         docker {
